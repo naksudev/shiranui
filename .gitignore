@@ -1,0 +1,5 @@
+# Ansible
+ansible.log
+
+# Vagrant
+.vagrant

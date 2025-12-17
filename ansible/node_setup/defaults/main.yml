@@ -1,0 +1,24 @@
+#SPDX-License-Identifier: MIT-0
+---
+timezone: Europe/Paris
+
+k3s_disable_swap: true
+
+k3s_kernel_modules:
+  - br_netfilter
+  - overlay
+
+k3s_sysctl:
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+  net.ipv4.ip_forward: 1
+
+k3s_packages:
+  - curl
+  - ca-certificates
+  - conntrack
+  - socat
+  - nftables
+
+k3s_disable_networkmanager: true
+

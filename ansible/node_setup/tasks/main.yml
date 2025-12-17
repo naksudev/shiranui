@@ -1,0 +1,126 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: Load kernel modules
+  ansible.builtin.command: "modprobe {{ item }}"
+  loop:
+    - overlay
+    - br_netfilter
+  changed_when: false
+  failed_when: false
+
+- name: Persist kernel modules
+  ansible.builtin.copy:
+    dest: /etc/modules
+    content: |
+      overlay
+      br_netfilter
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Configure sysctl
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-k3s.conf
+    content: |
+      net.bridge.bridge-nf-call-iptables=1
+      net.bridge.bridge-nf-call-ip6tables=1
+      net.ipv4.ip_forward=1
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Apply sysctl
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-k3s.conf 
+  changed_when: false
+
+- name: Disable swap
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb | int > 0
+  failed_when: false
+
+- name: Disable swap in fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^\s*([^#\n]+\s+swap\s+)'
+    replace: '# \1'
+  failed_when: false
+
+- name: Install packages
+  community.general.apk:
+    name:
+      - curl
+      - iptables
+      - ip6tables
+      - nftables
+      - ca-certificates
+      - openrc
+      - chrony
+      - bash
+    state: present
+    update_cache: true
+
+- name: Enable sysctl service
+  ansible.builtin.command: rc-update add sysctl boot
+  changed_when: false
+  failed_when: false
+
+- name: Set hostname
+  ansible.builtin.copy:
+    dest: /etc/hostname
+    content: "{{ inventory_hostname }}"
+  when: inventory_hostname is defined
+
+- name: Apply hostname
+  ansible.builtin.command: hostname "{{ inventory_hostname }}"
+  when: inventory_hostname is defined
+  changed_when: false
+
+- name: Update hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "127.0.1.1 {{ inventory_hostname }}"
+    state: present
+  when: inventory_hostname is defined
+
+- name: Enable chronyd
+  ansible.builtin.command: rc-update add chronyd default
+  changed_when: false
+  failed_when: false
+
+- name: Start chronyd
+  ansible.builtin.command: rc-service chronyd start
+  changed_when: false
+  failed_when: false
+
+- name: Stop firewall services
+  ansible.builtin.command: rc-service {{ item }} stop
+  loop:
+    - iptables
+    - nftables
+  failed_when: false
+  changed_when: false
+
+- name: Enable cgroups in rc.conf
+  ansible.builtin.lineinfile:
+    path: /etc/rc.conf
+    regexp: '^rc_cgroup_mode='
+    line: 'rc_cgroup_mode="unified"'
+    create: yes
+  notify: reboot_required
+
+- name: Enable cgroups service
+  ansible.builtin.service:
+    name: cgroups
+    enabled: yes
+
+- name: Create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/rancher
+    - /etc/rancher/k3s
+

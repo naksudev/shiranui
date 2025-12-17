@@ -1,0 +1,7 @@
+#SPDX-License-Identifier: MIT-0
+---
+- name: reboot_required
+  ansible.builtin.reboot:
+    msg: "Reboot required to apply cgroup configuration"
+    reboot_timeout: 300
+
